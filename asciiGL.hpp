@@ -27,26 +27,16 @@ namespace asciiGL {
     bool inBounds();
   };
   
-  class FragmentShaderSettings {
-    //light positions and such
-  };
-  
   class FragmentShader {
-    FragmentShaderSettings& settings;
   public:
-    FragmentShader(FragmentShaderSettings& s);
+    FragmentShader();
     virtual ~FragmentShader();
     virtual Pixel compute(VertexInformation* input);
   };
   
-  class VertexShaderSettings {
-    //transforms and the like
-  };
-  
   class VertexShader {
-    VertexShaderSettings& settings;
   public:
-    VertexShader(VertexShaderSettings & s);
+    VertexShader();
     virtual ~VertexShader();
     virtual VertexInformation* compute(VertexInformation* v);
   };
@@ -65,8 +55,6 @@ namespace asciiGL {
   typedef std::array<VertexInformation*, 3> Triangle;
   
   class Renderer {
-    std::vector<Triangle> triangles;
-  
     Buffer2D<Pixel> frameBuffer;
     Buffer2D<float> depthBuffer;
     int width;
@@ -86,10 +74,11 @@ namespace asciiGL {
     void rasterFlatBottomTri(VertexInformation * point, VertexInformation * left, VertexInformation * right);
   public:
     Renderer();
+    ~Renderer();
     Renderer(VertexShader& vs, FragmentShader& fs);
     Renderer(int width, int height, VertexShader& vs, FragmentShader& fs);
-    void setTriangles(std::vector<Triangle> tris);
-    void render();
+    void render(std::vector<Triangle> triangles);
     void pushFrame();//after successive render calls
+    void resize();//on sigwinch
   };
 };

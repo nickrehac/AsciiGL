@@ -18,14 +18,14 @@ bool VertexInformation::inBounds() {
   return pos.x > -1.0 && pos.x < 1.0 && pos.y > -1.0 && pos.y < 1.0 && pos.z < 0.0 && pos.z > -1.0;
 }
 
-VertexShader::VertexShader(VertexShaderSettings& s) : settings{s} {}
+VertexShader::VertexShader() {}
 VertexShader::~VertexShader() {}
 VertexInformation * VertexShader::compute(VertexInformation * v) {
   VertexInformation * retval = new VertexInformation;
   retval->position = v->position;
   return retval;
 }
-FragmentShader::FragmentShader(FragmentShaderSettings& s) : settings{s} {}
+FragmentShader::FragmentShader() {}
 FragmentShader::~FragmentShader() {}
 Pixel FragmentShader::compute(VertexInformation * v) {
   return Pixel('X');
@@ -74,14 +74,31 @@ Pixel::Pixel(char ch) {
 
 
 Renderer::Renderer(VertexShader & vs, FragmentShader & fs) : vertexShader{vs}, fragmentShader{fs} {
-  getmaxyx(stdscr, this->height, this->width);
+  initscr();
 
+  if(has_colors()) {
+    start_color();
+    init_pair(COLOR_RED, COLOR_RED, COLOR_BLACK);
+    init_pair(COLOR_GREEN, COLOR_GREEN, COLOR_BLACK);
+    init_pair(COLOR_YELLOW, COLOR_YELLOW, COLOR_BLACK);
+    init_pair(COLOR_BLUE, COLOR_BLUE, COLOR_BLACK);
+    init_pair(COLOR_MAGENTA, COLOR_MAGENTA, COLOR_BLACK);
+    init_pair(COLOR_CYAN, COLOR_CYAN, COLOR_BLACK);
+    init_pair(COLOR_WHITE, COLOR_WHITE, COLOR_BLACK);
+  }
+
+  getmaxyx(stdscr, this->height, this->width);
   this->depthBuffer = Buffer2D<float>(width, height, -1.0f);
   this->frameBuffer = Buffer2D<Pixel>(width, height, Pixel(' '));
 }
+Renderer::~Renderer() {
+  endwin();
+}
 
-void Renderer::setTriangles(std::vector<Triangle> tris) {
-  this->triangles = tris;
+void Renderer::resize() {
+  getmaxyx(stdscr, this->height, this->width);
+  this->depthBuffer = Buffer2D<float>(width, height, -1.0f);
+  this->frameBuffer = Buffer2D<Pixel>(width, height, Pixel(' '));
 }
 
 void Renderer::rasterFlatTopTri(VertexInformation * point, VertexInformation * left, VertexInformation * right) {
@@ -162,7 +179,7 @@ void Renderer::rasterFlatBottomTri(VertexInformation * point, VertexInformation 
   }
 }
 
-void Renderer::render() {
+void Renderer::render(std::vector<Triangle> triangles) {
   //for each triangle :
     //apply vec shader
     //rasterize

@@ -10,5 +10,8 @@ main: main.o asciiGL.o
 debug: CXXFLAGS += -g
 debug: main
 
+release: CXXFLAGS += -O3
+release: main
+
 clean:
 	rm *.o
