@@ -1,6 +1,4 @@
 #include "asciiGL.hpp"
-#include <algorithm>
-#include <signal.h>
 
 using namespace asciiGL;
 
@@ -87,6 +85,8 @@ Renderer::Renderer(VertexShader & vs, FragmentShader & fs) : vertexShader{vs}, f
     init_pair(COLOR_WHITE, COLOR_WHITE, COLOR_BLACK);
   }
 
+  this->numThreads = std::thread::hardware_concurrency();
+
   getmaxyx(stdscr, this->height, this->width);
   this->depthBuffer = Buffer2D<float>(width, height, -1.0f);
   this->frameBuffer = Buffer2D<Pixel>(width, height, Pixel(' '));
@@ -125,8 +125,21 @@ void Renderer::rasterFlatTopTri(VertexInformation * point, VertexInformation * l
       if(x >= width || x < 0) break;
       VertexInformation * fragment = leftInfo->VertexInformation::interpolate(rightInfo, (float)(x-leftX) / (rightX - leftX));
       if(depthBuffer.at(x, y) > fragment->position.z) continue;
-      depthBuffer.at(x,y) = fragment->position.z;
-      frameBuffer.at(x,y) = fragmentShader.compute(fragment);
+
+      if(this->numThreads > 1) {
+        this->bufferLock.lock();
+
+        if(depthBuffer.at(x,y) <= fragment->position.z) {
+          depthBuffer.at(x,y) = fragment->position.z;
+          frameBuffer.at(x,y) = fragmentShader.compute(fragment);
+        }
+
+        this->bufferLock.unlock();
+      } else {
+        depthBuffer.at(x,y) = fragment->position.z;
+        frameBuffer.at(x,y) = fragmentShader.compute(fragment);
+      }
+
       delete fragment;
     }
 
@@ -166,10 +179,23 @@ void Renderer::rasterFlatBottomTri(VertexInformation * point, VertexInformation 
 
     for(int x = leftX; x < rightX; x++) {
       if(x >= width || x < 0) break;
-      VertexInformation * fragment = leftInfo->VertexInformation::interpolate(rightInfo, (float)(x-leftX) / (interpRange));
+      VertexInformation * fragment = leftInfo->interpolate(rightInfo, (float)(x-leftX) / (interpRange));
       if(depthBuffer.at(x, y) > fragment->position.z) continue;
-      depthBuffer.at(x,y) = fragment->position.z;
-      frameBuffer.at(x,y) = fragmentShader.compute(fragment);
+
+      if(this->numThreads > 1) {
+        this->bufferLock.lock();
+
+        if(depthBuffer.at(x,y) <= fragment->position.z) {
+          depthBuffer.at(x,y) = fragment->position.z;
+          frameBuffer.at(x,y) = fragmentShader.compute(fragment);
+        }
+
+        this->bufferLock.unlock();
+      } else {
+        depthBuffer.at(x,y) = fragment->position.z;
+        frameBuffer.at(x,y) = fragmentShader.compute(fragment);
+      }
+
       delete fragment;
     }
 
@@ -179,12 +205,40 @@ void Renderer::rasterFlatBottomTri(VertexInformation * point, VertexInformation 
   }
 }
 
-void Renderer::render(std::vector<Triangle> triangles) {
-  //for each triangle :
-    //apply vec shader
-    //rasterize
-    //if passed depth test :
-      //write to buffer with frag shader from raster array
+void Renderer::renderMultithreaded(std::vector<Triangle> triangles) {
+  if(triangles.size() == 0) return;
+
+  std::vector<std::thread> threads;
+  std::vector<std::vector<Triangle>> threadTris;
+
+  int numTris = triangles.size();
+  int trisPerThread = numTris / this->numThreads;
+
+  int triCursor = 0;
+
+  for(int i = 0; i < this->numThreads; i++) {
+    std::vector<Triangle> curThreadTris;
+    for(int k = 0; k < trisPerThread; k++) {
+      curThreadTris.push_back(triangles[triCursor]);
+      triCursor++;
+    }
+    threadTris.push_back(curThreadTris);
+  }
+  for(int i = triCursor; i < numTris; i++) {
+    threadTris.back().push_back(triangles[i]);
+  }
+
+
+  for(int i = 0; i < this->numThreads; i++) {
+    threads.push_back(std::thread(&Renderer::renderSingleThread, this, threadTris[i]));
+  }
+
+  for(int i = 0; i < this->numThreads; i++) {
+    threads[i].join();
+  }
+}
+
+void Renderer::renderSingleThread(std::vector<Triangle> triangles) {
   for(Triangle tri : triangles) {
     VertexInformation* p1 = this->vertexShader.compute(tri[0]);
     VertexInformation* p2 = this->vertexShader.compute(tri[1]);
@@ -219,6 +273,23 @@ void Renderer::render(std::vector<Triangle> triangles) {
       //}
       //delete fragment
   }
+}
+
+void Renderer::render(std::vector<Triangle> triangles) {
+  //for each triangle :
+    //apply vec shader
+    //rasterize
+    //if passed depth test :
+      //write to buffer with frag shader from raster array
+
+  unsigned int numThreads = std::thread::hardware_concurrency();
+
+  if(this->numThreads > 1) {
+    renderMultithreaded(triangles);
+  } else {
+    renderSingleThread(triangles);
+  }
+
 }
 
 

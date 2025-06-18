@@ -2,6 +2,10 @@
 #include <array>
 #include <memory>
 #include <ncurses.h>
+#include <algorithm>
+#include <signal.h>
+#include <thread>
+#include <mutex>
 
 #include <glm/vec3.hpp>
 #include <glm/vec4.hpp>
@@ -57,6 +61,9 @@ namespace asciiGL {
   class Renderer {
     Buffer2D<Pixel> frameBuffer;
     Buffer2D<float> depthBuffer;
+    std::mutex bufferLock;
+    unsigned int numThreads;
+
     int width;
     int height;
   
@@ -72,6 +79,8 @@ namespace asciiGL {
     bool depthTest(VertexInformation*);
     void rasterFlatTopTri(VertexInformation * point, VertexInformation * left, VertexInformation * right);
     void rasterFlatBottomTri(VertexInformation * point, VertexInformation * left, VertexInformation * right);
+    void renderMultithreaded(std::vector<Triangle> triangles);
+    void renderSingleThread(std::vector<Triangle> triangles);
   public:
     Renderer();
     ~Renderer();
